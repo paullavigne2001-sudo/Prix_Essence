@@ -7,6 +7,19 @@ function initMap(lat, lon) {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 }
 
+function detectBrand(adresse = "") {
+  const a = adresse.toLowerCase();
+
+  if (a.includes("total")) return "TOTAL";
+  if (a.includes("carrefour")) return "CARREFOUR";
+  if (a.includes("leclerc")) return "LECLERC";
+  if (a.includes("intermarche")) return "INTERMARCHE";
+  if (a.includes("bp")) return "BP";
+  if (a.includes("shell")) return "SHELL";
+
+  return "STATION";
+}
+
 async function locate() {
   navigator.geolocation.getCurrentPosition(async pos => {
     const lat = pos.coords.latitude;
@@ -24,8 +37,6 @@ async function loadStations(lat, lon) {
     const res = await fetch(url);
     const data = await res.json();
 
-    console.log("DATA API :", data);
-
     const container = document.getElementById("stations");
     container.innerHTML = "";
 
@@ -34,7 +45,6 @@ async function loadStations(lat, lon) {
       return;
     }
 
-    // 🥇 recherche station la moins chère
     let cheapest = null;
     let cheapestPrice = Infinity;
 
@@ -48,7 +58,7 @@ async function loadStations(lat, lon) {
       }
     });
 
-    // 🥇 affichage premium
+    // 🥇 bloc meilleur prix
     if (cheapest) {
       container.innerHTML += `
         <div style="
@@ -56,49 +66,49 @@ async function loadStations(lat, lon) {
           padding:20px;
           border-radius:15px;
           margin-bottom:15px;
-          box-shadow:0 10px 25px rgba(0,0,0,0.3)
         ">
-          <h2>🥇 Meilleur prix autour</h2>
+          <h2>🥇 Meilleur prix</h2>
           <h3>${cheapest.adresse}</h3>
           <p>${cheapest.ville}</p>
           <p style="font-size:24px;font-weight:bold">
-            ⛽ ${cheapestPrice} €
+            ${cheapestPrice} €
           </p>
         </div>
       `;
     }
 
-    // 🗺️ affichage stations
     data.records.forEach(record => {
       const f = record.fields;
 
       const latStation = f.geom?.[0];
       const lonStation = f.geom?.[1];
 
-      // 🎯 marker avec prix
+      const brand = detectBrand(f.adresse);
+
+      // ✅ marker lisible (plus de point)
       if (latStation && lonStation) {
         const icon = L.divIcon({
           html: `<div style="
             background:#22c55e;
-            color:black;
-            padding:5px 8px;
-            border-radius:10px;
-            font-size:12px;
+            color:#000;
+            padding:6px 10px;
+            border-radius:12px;
+            font-size:13px;
             font-weight:bold;
+            box-shadow:0 2px 6px rgba(0,0,0,0.3);
           ">
-            ${f.gazole_prix || ""}
+            ${f.gazole_prix || "-"}€
           </div>`,
           className: ""
         });
 
         L.marker([latStation, lonStation], { icon })
           .addTo(map)
-          .bindPopup(f.adresse || "Station");
+          .bindPopup(`${brand} - ${f.adresse}`);
       }
 
       const isFav = favorites.includes(record.recordid);
 
-      // 🎨 carte premium
       container.innerHTML += `
         <div style="
           background: linear-gradient(145deg,#1e293b,#0f172a);
@@ -106,15 +116,15 @@ async function loadStations(lat, lon) {
           padding:15px;
           margin:10px 0;
           box-shadow:0 5px 15px rgba(0,0,0,0.4);
-          transition:0.2s;
         ">
-          <h3>${f.adresse || "Station"}</h3>
-          <p style="opacity:0.7">${f.ville || ""}</p>
+          <h3>${brand}</h3>
+          <p>${f.adresse}</p>
+          <p style="opacity:0.7">${f.ville}</p>
 
-          <div style="display:flex;gap:10px;margin-top:10px">
-            <span>⛽ ${f.gazole_prix || "-"}</span>
-            <span>SP95 ${f.sp95_prix || "-"}</span>
-            <span>SP98 ${f.sp98_prix || "-"}</span>
+          <div style="margin-top:10px">
+            <div>GAZOLE : ${f.gazole_prix || "-"}</div>
+            <div>SP95 : ${f.sp95_prix || "-"}</div>
+            <div>SP98 : ${f.sp98_prix || "-"}</div>
           </div>
 
           <button onclick="toggleFav('${record.recordid}')">
@@ -125,7 +135,7 @@ async function loadStations(lat, lon) {
     });
 
   } catch (error) {
-    console.error("ERREUR API :", error);
+    console.error(error);
     document.getElementById("stations").innerHTML = "Erreur de chargement";
   }
 }
