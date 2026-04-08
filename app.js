@@ -19,46 +19,44 @@ async function locate() {
 
 async function loadStations(lat, lon) {
   try {
-    const url = `https://api.allorigins.win/raw?url=https://api.prix-carburants.gouv.fr/v1/stations?lat=${lat}&lon=${lon}`;
-    
+    const url = `https://data.economie.gouv.fr/api/records/1.0/search/?dataset=prix-des-carburants-en-france-flux-instantane-v2&rows=20&geofilter.distance=${lat},${lon},5000`;
+
     const res = await fetch(url);
     const data = await res.json();
 
-    console.log("DATA API :", data); // debug
+    console.log("DATA API :", data);
 
     const container = document.getElementById("stations");
     container.innerHTML = "";
 
-    if (!data.stations || data.stations.length === 0) {
+    if (!data.records || data.records.length === 0) {
       container.innerHTML = "Aucune station trouvée";
       return;
     }
 
-    data.stations.slice(0,10).forEach(station => {
+    data.records.forEach(record => {
+      const f = record.fields;
 
-      // ✅ conversion tableau → objet
-      const p = {};
-      (station.prix || []).forEach(f => {
-        p[f.carburant] = f.prix;
-      });
+      // coordonnées
+      const latStation = f.geom?.[0];
+      const lonStation = f.geom?.[1];
 
-      // Marker
-      if (station.latitude && station.longitude) {
-        L.marker([station.latitude, station.longitude])
+      if (latStation && lonStation) {
+        L.marker([latStation, lonStation])
           .addTo(map)
-          .bindPopup(station.nom);
+          .bindPopup(f.adresse || "Station");
       }
 
-      const isFav = favorites.includes(station.id);
+      const isFav = favorites.includes(record.recordid);
 
       container.innerHTML += `
         <div class="card">
-          <h3>${station.nom || "Station"}</h3>
-          <p>${station.adresse || ""}</p>
-          <p>⛽ Gazole : ${p.Gazole || "-"}</p>
-          <p>⛽ SP95 : ${p.SP95 || "-"}</p>
-          <p>⛽ SP98 : ${p.SP98 || "-"}</p>
-          <button onclick="toggleFav('${station.id}')">
+          <h3>${f.adresse || "Station"}</h3>
+          <p>${f.ville || ""}</p>
+          <p>⛽ Gazole : ${f.gazole_prix || "-"}</p>
+          <p>⛽ SP95 : ${f.sp95_prix || "-"}</p>
+          <p>⛽ SP98 : ${f.sp98_prix || "-"}</p>
+          <button onclick="toggleFav('${record.recordid}')">
             ${isFav ? "⭐ Retirer" : "☆ Favori"}
           </button>
         </div>
@@ -66,7 +64,7 @@ async function loadStations(lat, lon) {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("ERREUR API :", error);
     document.getElementById("stations").innerHTML = "Erreur de chargement";
   }
 }
