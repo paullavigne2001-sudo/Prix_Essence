@@ -1,20 +1,19 @@
 let map;
 let favorites = JSON.parse(localStorage.getItem("fav")) || [];
 
+// 🔥 cache OSM (évite rechargement)
+let osmCache = {};
+
 function initMap(lat, lon) {
   map = L.map('map').setView([lat, lon], 13);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 }
 
-// ✅ NOUVELLE VERSION
-function detectBrand(f) {
-  // priorité à l’enseigne officielle
-  if (f.enseigne) {
-    return f.enseigne.toUpperCase();
-  }
+// fallback si OSM ne trouve rien
+function detectBrandFallback(f) {
+  if (f.enseigne) return f.enseigne.toUpperCase();
 
-  // fallback si pas d’enseigne
   const a = (f.adresse || "").toLowerCase();
 
   if (a.includes("total")) return "TOTAL";
@@ -25,6 +24,39 @@ function detectBrand(f) {
   if (a.includes("shell")) return "SHELL";
 
   return "STATION";
+}
+
+// 🔥 UNE SEULE requête OSM pour toutes les stations
+async function fetchOSMBrands(lat, lon) {
+  try {
+    const query = `
+      [out:json];
+      node["amenity"="fuel"](around:5000,${lat},${lon});
+      out;
+    `;
+
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: query
+    });
+
+    const data = await res.json();
+
+    const map = {};
+
+    data.elements.forEach(el => {
+      if (el.lat && el.lon) {
+        const key = `${el.lat.toFixed(3)}_${el.lon.toFixed(3)}`;
+        map[key] = el.tags?.brand || el.tags?.name || "STATION";
+      }
+    });
+
+    return map;
+
+  } catch (e) {
+    console.error("OSM ERROR", e);
+    return {};
+  }
 }
 
 async function locate() {
@@ -52,6 +84,13 @@ async function loadStations(lat, lon) {
       return;
     }
 
+    // 🔥 OSM (avec cache)
+    const cacheKey = `${lat.toFixed(2)}_${lon.toFixed(2)}`;
+    if (!osmCache[cacheKey]) {
+      osmCache[cacheKey] = await fetchOSMBrands(lat, lon);
+    }
+    const osmData = osmCache[cacheKey];
+
     let cheapest = null;
     let cheapestPrice = Infinity;
 
@@ -65,7 +104,7 @@ async function loadStations(lat, lon) {
       }
     });
 
-    // 🥇 bloc meilleur prix
+    // 🥇 meilleur prix
     if (cheapest) {
       container.innerHTML += `
         <div style="
@@ -90,8 +129,12 @@ async function loadStations(lat, lon) {
       const latStation = f.geom?.[0];
       const lonStation = f.geom?.[1];
 
-      // ✅ utilisation correcte
-      const brand = detectBrand(f);
+      // 🔥 matching OSM approximatif
+      let brand = "STATION";
+      if (latStation && lonStation) {
+        const key = `${latStation.toFixed(3)}_${lonStation.toFixed(3)}`;
+        brand = osmData[key] || detectBrandFallback(f);
+      }
 
       if (latStation && lonStation) {
         const icon = L.divIcon({
