@@ -7,8 +7,15 @@ function initMap(lat, lon) {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 }
 
-function detectBrand(adresse = "") {
-  const a = adresse.toLowerCase();
+// ✅ NOUVELLE VERSION
+function detectBrand(f) {
+  // priorité à l’enseigne officielle
+  if (f.enseigne) {
+    return f.enseigne.toUpperCase();
+  }
+
+  // fallback si pas d’enseigne
+  const a = (f.adresse || "").toLowerCase();
 
   if (a.includes("total")) return "TOTAL";
   if (a.includes("carrefour")) return "CARREFOUR";
@@ -83,9 +90,9 @@ async function loadStations(lat, lon) {
       const latStation = f.geom?.[0];
       const lonStation = f.geom?.[1];
 
-      const brand = detectBrand(f.adresse);
+      // ✅ utilisation correcte
+      const brand = detectBrand(f);
 
-      // ✅ marker lisible (plus de point)
       if (latStation && lonStation) {
         const icon = L.divIcon({
           html: `<div style="
