@@ -1,0 +1,37 @@
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px;
+  background: #1e293b;
+}
+
+#map {
+  height: 40vh;
+}
+
+#stations {
+  padding: 10px;
+}
+
+.card {
+  background: #1e293b;
+  margin: 10px 0;
+  padding: 15px;
+  border-radius: 12px;
+}
+
+button {
+  background: #22c55e;
+  border: none;
+  padding: 10px;
+  border-radius: 10px;
+  color: white;
+  cursor: pointer;
+}
