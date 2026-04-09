@@ -26,9 +26,12 @@ function detectBrandFallback(f) {
   return "STATION";
 }
 
-// 🔥 OSM (1 seule requête)
+// 🔥 OSM sécurisé (timeout + non bloquant)
 async function fetchOSMBrands(lat, lon) {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
     const query = `
       [out:json];
       node["amenity"="fuel"](around:5000,${lat},${lon});
@@ -37,8 +40,13 @@ async function fetchOSMBrands(lat, lon) {
 
     const res = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
-      body: query
+      body: query,
+      signal: controller.signal
     });
+
+    clearTimeout(timeout);
+
+    if (!res.ok) throw new Error("OSM error");
 
     const data = await res.json();
 
@@ -53,7 +61,8 @@ async function fetchOSMBrands(lat, lon) {
 
     return map;
 
-  } catch {
+  } catch (e) {
+    console.warn("OSM indisponible");
     return {};
   }
 }
@@ -83,14 +92,19 @@ async function loadStations(lat, lon) {
       return;
     }
 
-    // 🔥 OSM cache
+    // 🔥 OSM non bloquant + cache
     const cacheKey = `${lat.toFixed(2)}_${lon.toFixed(2)}`;
-    if (!osmCache[cacheKey]) {
-      osmCache[cacheKey] = await fetchOSMBrands(lat, lon);
-    }
-    const osmData = osmCache[cacheKey];
+    let osmData = {};
 
-    // 🔥 préparation + tri
+    try {
+      if (!osmCache[cacheKey]) {
+        osmCache[cacheKey] = fetchOSMBrands(lat, lon); // PAS await ici
+      }
+      osmData = await osmCache[cacheKey];
+    } catch {
+      osmData = {};
+    }
+
     const stations = data.records.map(record => {
       const f = record.fields;
 
@@ -175,6 +189,7 @@ async function loadStations(lat, lon) {
     });
 
   } catch (error) {
+    console.error(error);
     container.innerHTML = "Erreur de chargement";
   }
 }
