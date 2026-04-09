@@ -1,11 +1,10 @@
 {
   "name": "Prix Essence",
   "short_name": "Essence",
-  "start_url": ".",
+  "start_url": "/Prix_Essence/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#22c55e",
-  "orientation": "portrait",
   "icons": [
     {
       "src": "/Prix_Essence/icon-192.png",
