@@ -1,140 +1,87 @@
 let map;
 let favorites = JSON.parse(localStorage.getItem("fav")) || [];
 
-// ❌ OSM désactivé pour stabilité
-// let osmCache = {};
-
 function initMap(lat, lon) {
   map = L.map('map').setView([lat, lon], 13);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 }
 
-function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI/180;
-  const dLon = (lon2 - lon1) * Math.PI/180;
-
-  const a =
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function detectBrandFallback(f) {
-  if (f.enseigne) return f.enseigne.toUpperCase();
-  return "STATION";
-}
-
 async function locate() {
-  navigator.geolocation.getCurrentPosition(async pos => {
-    const lat = pos.coords.latitude;
-    const lon = pos.coords.longitude;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
 
-    initMap(lat, lon);
-    loadStations(lat, lon);
-  });
+      initMap(lat, lon);
+      loadStations(lat, lon);
+    },
+    err => {
+      alert("Géolocalisation refusée");
+    }
+  );
 }
 
 async function loadStations(lat, lon) {
   const container = document.getElementById("stations");
-  container.innerHTML = "⏳ Recherche des meilleures stations...";
+  container.innerHTML = "⏳ Chargement...";
 
   try {
-    const url = `https://data.economie.gouv.fr/api/records/1.0/search/?dataset=prix-des-carburants-en-france-flux-instantane-v2&rows=20&geofilter.distance=${lat},${lon},5000`;
+    const url = `https://data.economie.gouv.fr/api/records/1.0/search/?dataset=prix-des-carburants-en-france-flux-instantane-v2&rows=10&geofilter.distance=${lat},${lon},5000`;
 
     const res = await fetch(url);
+
+    if (!res.ok) {
+      throw new Error("API error");
+    }
+
     const data = await res.json();
+
+    console.log("DATA:", data);
 
     if (!data.records || data.records.length === 0) {
       container.innerHTML = "Aucune station trouvée";
       return;
     }
 
-    // 🔥 préparation + tri
-    const stations = data.records.map(record => {
+    container.innerHTML = "";
+
+    data.records.forEach(record => {
       const f = record.fields;
 
       const latS = f.geom?.[0];
       const lonS = f.geom?.[1];
 
-      const price = f.gazole_prix || f.sp95_prix || f.sp98_prix || 999;
-      const distance = latS ? getDistance(lat, lon, latS, lonS) : 999;
-
-      return { record, f, price, distance, latS, lonS };
-    });
-
-    stations.sort((a, b) =>
-      (a.price * 0.7 + a.distance * 0.3) -
-      (b.price * 0.7 + b.distance * 0.3)
-    );
-
-    const cheapest = stations[0];
-
-    container.innerHTML = "";
-
-    // 🥇 meilleur
-    if (cheapest) {
-      container.innerHTML += `
-        <div class="card best">
-          <h2>🥇 Meilleur prix</h2>
-          <h3>${cheapest.f.adresse}</h3>
-          <p>${cheapest.f.ville}</p>
-          <p>${cheapest.price} €</p>
-        </div>
-      `;
-    }
-
-    stations.slice(0,10).forEach(s => {
-      const brand = detectBrandFallback(s.f);
-
-      if (s.latS) {
-        const icon = L.divIcon({
-          html: `<div style="
-            background:#22c55e;
-            padding:5px 8px;
-            border-radius:10px;
-            font-weight:bold;
-          ">${s.price}€</div>`,
-          className: ""
-        });
-
-        L.marker([s.latS, s.lonS], { icon })
+      // Marker simple
+      if (latS && lonS) {
+        L.marker([latS, lonS])
           .addTo(map)
-          .bindPopup(brand);
+          .bindPopup(f.adresse || "Station");
       }
 
-      const isFav = favorites.includes(s.record.recordid);
+      const isFav = favorites.includes(record.recordid);
 
       container.innerHTML += `
-        <div class="card" onclick="window.open('https://www.google.com/maps?q=${s.latS},${s.lonS}')">
-          <h3>${brand}</h3>
-          <p>${s.f.adresse}</p>
-          <p>${s.f.ville}</p>
+        <div style="background:#1e293b;padding:15px;margin:10px;border-radius:10px;">
+          <h3>${f.adresse || "Station"}</h3>
+          <p>${f.ville || ""}</p>
 
           <div>
-            <div>GAZOLE : ${s.f.gazole_prix || "-"}</div>
-            <div>SP95 : ${s.f.sp95_prix || "-"}</div>
-            <div>SP98 : ${s.f.sp98_prix || "-"}</div>
+            <div>GAZOLE : ${f.gazole_prix || "-"}</div>
+            <div>SP95 : ${f.sp95_prix || "-"}</div>
+            <div>SP98 : ${f.sp98_prix || "-"}</div>
           </div>
 
-          <button onclick="event.stopPropagation();toggleFav('${s.record.recordid}')">
+          <button onclick="toggleFav('${record.recordid}')">
             ${isFav ? "⭐ Retirer" : "☆ Favori"}
           </button>
-
-          <br><br>
-          <a href="https://www.google.com/maps/dir/?api=1&destination=${s.latS},${s.lonS}" target="_blank">
-            🚗 Itinéraire
-          </a>
         </div>
       `;
     });
 
   } catch (error) {
-    console.error(error);
-    container.innerHTML = "Erreur de chargement";
+    console.error("ERREUR :", error);
+    container.innerHTML = "❌ Erreur chargement données";
   }
 }
 
