@@ -1,6 +1,8 @@
 let map;
 let favorites = JSON.parse(localStorage.getItem("fav")) || [];
-let osmCache = {};
+
+// ❌ OSM désactivé pour stabilité
+// let osmCache = {};
 
 function initMap(lat, lon) {
   map = L.map('map').setView([lat, lon], 13);
@@ -24,47 +26,6 @@ function getDistance(lat1, lon1, lat2, lon2) {
 function detectBrandFallback(f) {
   if (f.enseigne) return f.enseigne.toUpperCase();
   return "STATION";
-}
-
-// 🔥 OSM sécurisé (timeout + non bloquant)
-async function fetchOSMBrands(lat, lon) {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-
-    const query = `
-      [out:json];
-      node["amenity"="fuel"](around:5000,${lat},${lon});
-      out;
-    `;
-
-    const res = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      body: query,
-      signal: controller.signal
-    });
-
-    clearTimeout(timeout);
-
-    if (!res.ok) throw new Error("OSM error");
-
-    const data = await res.json();
-
-    const map = {};
-
-    data.elements.forEach(el => {
-      if (el.lat && el.lon) {
-        const key = `${el.lat.toFixed(3)}_${el.lon.toFixed(3)}`;
-        map[key] = el.tags?.brand || el.tags?.name || "STATION";
-      }
-    });
-
-    return map;
-
-  } catch (e) {
-    console.warn("OSM indisponible");
-    return {};
-  }
 }
 
 async function locate() {
@@ -92,19 +53,7 @@ async function loadStations(lat, lon) {
       return;
     }
 
-    // 🔥 OSM non bloquant + cache
-    const cacheKey = `${lat.toFixed(2)}_${lon.toFixed(2)}`;
-    let osmData = {};
-
-    try {
-      if (!osmCache[cacheKey]) {
-        osmCache[cacheKey] = fetchOSMBrands(lat, lon); // PAS await ici
-      }
-      osmData = await osmCache[cacheKey];
-    } catch {
-      osmData = {};
-    }
-
+    // 🔥 préparation + tri
     const stations = data.records.map(record => {
       const f = record.fields;
 
@@ -139,12 +88,7 @@ async function loadStations(lat, lon) {
     }
 
     stations.slice(0,10).forEach(s => {
-      let brand = "STATION";
-
-      if (s.latS) {
-        const key = `${s.latS.toFixed(3)}_${s.lonS.toFixed(3)}`;
-        brand = osmData[key] || detectBrandFallback(s.f);
-      }
+      const brand = detectBrandFallback(s.f);
 
       if (s.latS) {
         const icon = L.divIcon({
