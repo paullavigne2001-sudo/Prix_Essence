@@ -1,13 +1,10 @@
-const CACHE = "essence-v2";
+const CACHE = "essence-v1";
 
 self.addEventListener("install", e => {
   e.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll([
-      "/",
-      "/index.html",
-      "/style.css",
-      "/app.js"
-    ]))
+    caches.open(CACHE).then(cache =>
+      cache.addAll(["/", "/index.html", "/style.css", "/app.js"])
+    )
   );
 });
 
