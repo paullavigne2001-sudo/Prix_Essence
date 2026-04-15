@@ -1,3 +1,4 @@
+alert("JS chargé");
 let map;
 let favorites = JSON.parse(localStorage.getItem("fav")) || [];
 
@@ -94,3 +95,4 @@ function toggleFav(id) {
 
   localStorage.setItem("fav", JSON.stringify(favorites));
 }
+locate();
